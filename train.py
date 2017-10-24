@@ -9,6 +9,7 @@ from keras import backend as K
 from keras.applications.vgg16 import VGG16
 import ulti
 from ulti import load_data
+import os
 
 # parameter
 ulti.data_dir = "data"
@@ -23,8 +24,8 @@ save_dir = "save_model"
 model_path = os.path.join(save_dir, "model.h5")
 tflog_dir = os.path.join(save_dir, "tf_log")
 
-x_train, y_train = load_data(dset="train")
-x_test, y_test = load_data(dset="test")
+x_train, y_train = load_data(dset="train", target="no_hat")
+x_test, y_test = load_data(dset="test", target="no_hat")
 
 # model
 
@@ -32,7 +33,7 @@ x_test, y_test = load_data(dset="test")
 base_model =  VGG16(weights=None, include_top=False, pooling=None, input_shape=(224,224,3))
 inputs = base_model.input
 # x = base_model.output
-x = base_model.get_layer("block3_pool")
+x = base_model.get_layer("block3_pool").output
 x = layers.GlobalAveragePooling2D()(x)
 x = layers.Dense(100, activation='relu', name='fc1')(x)
 x = layers.Dense(1, activation="sigmoid", name="fc2")(x)

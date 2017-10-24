@@ -1,0 +1,12 @@
+nohup: ignoring input
+Using TensorFlow backend.
+Traceback (most recent call last):
+  File "train.py", line 48, in <module>
+    validation_data=(x_test, y_test))
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/training.py", line 1522, in fit
+    batch_size=batch_size)
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/training.py", line 1390, in _standardize_user_data
+    _check_array_lengths(x, y, sample_weights)
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/training.py", line 241, in _check_array_lengths
+    'and ' + str(list(set_y)[0]) + ' target samples.')
+ValueError: Input arrays should have the same number of samples as target arrays. Found 500 input samples and 400 target samples.
