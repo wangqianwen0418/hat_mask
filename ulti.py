@@ -85,48 +85,43 @@ def load_labels(dset="train", target="no_mask"):
 
 
 
-def img_process(fpath, model_rpn, model_classifier):
-    img = cv2.imread(filepath)
 
-	X, ratio = format_img(img, C)
-    return np.copy(X)
-
-# def img_process(fpath):
-    # global w, h
-    # img = Image.open(fpath)
-    # _PIL_INTERPOLATION_METHODS = {
-    #     'nearest': Image.NEAREST,
-    #     'bilinear': Image.BILINEAR,
-    #     'bicubic': Image.BICUBIC,
-    #     'hamming': Image.HAMMING,
-    #     'box': Image.BOX,
-    #     "lanczos": Image.LANCZOS
-    # }
+def img_process(fpath):
+    global w, h
+    img = Image.open(fpath)
+    _PIL_INTERPOLATION_METHODS = {
+        'nearest': Image.NEAREST,
+        'bilinear': Image.BILINEAR,
+        'bicubic': Image.BICUBIC,
+        'hamming': Image.HAMMING,
+        'box': Image.BOX,
+        "lanczos": Image.LANCZOS
+    }
     
-    # if (img.mode!='RGB'):
-    #     img = img.convert("RGB")
-    # # resize and corp
-    # if img.size != (w, h):
-    #     short_edg = min(img.size)
-    #     resample = _PIL_INTERPOLATION_METHODS['bilinear']
-    #     resized = img.resize((w, h), resample)
-    #     # xx = random.randint(0, scaled_w - w)
-    #     # yy = random.randint(0, scaled_h - h)
-    #     # crop = resized.crop((xx, yy, w+xx, h+yy))
-    # else: 
-    #     resized = img
+    if (img.mode!='RGB'):
+        img = img.convert("RGB")
+    # resize and corp
+    if img.size != (w, h):
+        short_edg = min(img.size)
+        resample = _PIL_INTERPOLATION_METHODS['bilinear']
+        resized = img.resize((w, h), resample)
+        # xx = random.randint(0, scaled_w - w)
+        # yy = random.randint(0, scaled_h - h)
+        # crop = resized.crop((xx, yy, w+xx, h+yy))
+    else: 
+        resized = img
 
-    # # resized.show()
+    # resized.show()
 
-    # arr = np.asarray(resized)
-    # arr = arr.astype(dtype=K.floatx())
-    # arr = np.expand_dims(arr, axis=0)
-    # # arr = preprocess_input(arr, data_format='channels_last', mode='tf')
-    # ## zero-center between [-1, 1]
-    # arr /=255
-    # arr -= 0.5
-    # arr *=2
-    # return arr
+    arr = np.asarray(resized)
+    arr = arr.astype(dtype=K.floatx())
+    arr = np.expand_dims(arr, axis=0)
+    # arr = preprocess_input(arr, data_format='channels_last', mode='tf')
+    ## zero-center between [-1, 1]
+    arr /=255
+    arr -= 0.5
+    arr *=2
+    return arr
 
 def load_data(dset="train", target="no_mask"):
     return load_imgs(dset), load_labels(dset, target)

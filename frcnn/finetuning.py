@@ -12,7 +12,7 @@ from optparse import OptionParser
 import time
 
 from keras import backend as K
-from kereas import layers
+from keras import layers
 from keras.layers import Input
 from keras.models import Model
 from keras.utils import generic_utils
@@ -20,32 +20,11 @@ from keras.utils import generic_utils
 
 from keras_frcnn import config
 from keras_frcnn import roi_helpers
+from keras_frcnn.my_parser import get_data, my_generator 
 import keras_frcnn.resnet as nn
 
 from test_frcnn import format_img
-from ulti import load_data
-ulti.data_dir = "data"
-ulti.num_imgs = 500
-ulti.ratio_train = 0.8
-ulti.w = 224
-ulti.h = 224
-
-x_train, y_train = load_data(dset="train", target="no_hat")
-x_test, y_test = load_data(dset="test", target="no_hat")
-
-epoch_length = 1000
-num_epochs = 200
-iter_num = 0
-
-losses = np.zeros((epoch_length, 5))
-rpn_accuracy_rpn_monitor = []
-rpn_accuracy_for_epoch = []
-start_time = time.time()
-
-best_loss = np.Inf
-
-class_mapping_inv = {v: k for k, v in class_mapping.items()}
-    
+# load the model config
 with open("model_frcnn/config.pickle", 'rb') as f_in:
 	C = pickle.load(f_in)
 f_in.close()
@@ -54,6 +33,13 @@ C.use_horizontal_flips = True
 C.use_vertical_flips = False
 C.rot_90 = False
 C.num_rois = 32 #Number of ROIs per iteration
+C.model_path = "model_tuning"
+
+class_mapping = C.class_mapping
+if 'bg' not in class_mapping:
+	class_mapping['bg'] = len(class_mapping)
+class_mapping = {v: k for k, v in class_mapping.items()}
+
 num_features = 1024 # 1024 for resnet, 512 for vgg
 input_shape_img = (None, None, 3)
 input_shape_features = (None, None, num_features)
@@ -72,39 +58,103 @@ classifier = nn.classifier(feature_map_input, roi_input, C.num_rois, nb_classes=
 
 model_rpn = Model(img_input, rpn_layers)
 
-model_classifier = Model([feature_map_input, roi_input], classifier)
+model_classifier_only = Model([feature_map_input, roi_input], classifier)
 
 # load pretrained weights
 model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_classifier.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
+model_classifier_only.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
 
-x = model_classifier.get_layer("time_distributed_1").output
+x = model_classifier_only.get_layer("time_distributed_1").output
 x = layers.TimeDistributed(layers.Dense(1, activation="sigmoid"))(x)
-x = layers.Lambda(lambda x: K.max(x))(x)
-model_tuning = Model([img_input, roi_input], x)
+# x = layers.Lambda(lambda x: K.max(x))(x)
+x = layers.Flatten()(x)
+x = layers.Dense(1, activation="sigmoid")(x)
+model_tuning = Model([feature_map_input, roi_input], x)
 
 # model_rpn.compile(optimizer='sgd', loss='mse')
-model_tuning.compile(optimizer='sgd', loss='mse')
+model_tuning.compile(optimizer='sgd', loss='mse', metrics=['accuracy'])
+# model_tuning.summary()
 
-data_gen_train = data_generators.get_anchor_gt(train_imgs, classes_count, C, nn.get_img_output_length, K.image_dim_ordering(), mode='train')
-data_gen_val = data_generators.get_anchor_gt(val_imgs, classes_count, C, nn.get_img_output_length,K.image_dim_ordering(), mode='val')
+train_imgs, train_labels = get_data("../data/", mode="train", target="no_hat")
+val_imgs, val_labels = get_data("../data/", mode="val", target="no_hat")
 
-datagen = ImageDataGenerator(
-    featurewise_center=False,  # set input mean to 0 over the dataset
-    samplewise_center=False,  # set each sample mean to 0
-    featurewise_std_normalization=False,  # divide inputs by std of the dataset
-    samplewise_std_normalization=False,  # divide each input by its std
-    zca_whitening=False,  # apply ZCA whitening
-    rotation_range=0,  # randomly rotate images in the range (degrees, 0 to 180)
-    width_shift_range=0.,  # randomly shift images horizontally (fraction of total width)
-    height_shift_range=0.,  # randomly shift images vertically (fraction of total height)
-    horizontal_flip=True,  # randomly flip images
-    vertical_flip=False)  # randomly flip images
+data_gen_train = my_generator(train_imgs, train_labels, C, mode='train')
+data_gen_val = my_generator(val_imgs, val_labels, C, mode='val')
 
-datagen.fit(x_train)
+# train the model_tuning
+epoch_length = 1000
+num_epochs = 200
+iter_num = 0
 
-checkpoint = keras.callbacks.ModelCheckpoint(filepath=model_path, verbose=1, save_best_only=True, save_weights_only=False)
-tf_log = keras.callbacks.TensorBoard(log_dir=tflog_dir, batch_size=batch_size)
-callbacks = [checkpoint, tf_log]
+losses = np.zeros((epoch_length, 5))
+start_time = time.time()
 
-for epo in num_epochs:
+best_loss = np.Inf
+bbox_threshold = 0.8
+
+class_mapping_inv = {v: k for k, v in class_mapping.items()}
+for epoch_num in range(num_epochs):
+  progbar = generic_utils.Progbar(epoch_length)
+  print('Epoch {}/{}'.format(epoch_num + 1, num_epochs))
+  while True:
+    try:
+      # not efficient, one image is a batch
+      img, label = next(data_gen_train)
+      print(img.shape)
+      [Y1, Y2, F] = model_rpn.predict(img)
+      R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7) # R.shape = [max_boxes, 4]
+      # convert from (x1,y1,x2,y2) to (x,y,w,h)
+      R[:, 2] -= R[:, 0]
+      R[:, 3] -= R[:, 1]
+      person_roi = np.zeros((1, 32, 4))
+      person_i = 0
+      for jk in range(R.shape[0]//C.num_rois + 1):
+        ROIs = np.expand_dims(R[C.num_rois*jk:C.num_rois*(jk+1), :], axis=0) # shape [1, num_rois, 4]
+        if ROIs.shape[1] == 0:
+          break
+        if jk == R.shape[0]//C.num_rois:
+          curr_shape = ROIs.shape
+          target_shape = (curr_shape[0],C.num_rois,curr_shape[2])
+          ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
+          ROIs_padded[:, :curr_shape[1], :] = ROIs
+          ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
+          ROIs = ROIs_padded
+        [P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
+        for ii in range(P_cls.shape[1]):
+          if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+            continue
+          cls_id = np.argmax(P_cls[0, ii, :])
+          cls_name = class_mapping[cls_id]
+          if cls_name == "person":
+            person_roi[0, person_i, :] = ROIs[0, ii, :]
+            person_i += 1
+      while person_i < C.num_rois:
+        index = np.random.randint(0, len(person_roi))
+        person_roi[0, person_i, :] = ROIs[0, index, :]
+        person_i += 1
+      loss = model_tuning.train_on_batch([F, person_roi], label)
+      print("loss", loss)
+      losses[iter_num, 0] = loss
+      # losses[iter_num, 1] = loss[2]
+      iter_num += 1
+      progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), ('acc', np.mean(losses[:iter_num, 1]))])
+      
+      if iter_num == epoch_length:
+        loss = np.mean(losses[:, 0])
+        acc = np.mean(losses[:, 1])
+				# curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
+        iter_num = 0
+        start_time = time.time()
+        if loss < best_loss:
+          if C.verbose:
+            print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+          best_loss = loss
+          model_all.save_weights(C.model_path)
+        break
+        
+    except Exception as e:
+      print('Exception: {}'.format(e))
+      continue
+
+print('Training complete, exiting.')
+
