@@ -1,24 +1,15 @@
 nohup: ignoring input
-2017-10-26 10:31:12.382376: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use SSE4.1 instructions, but these are available on your machine and could speed up CPU computations.
-2017-10-26 10:31:12.382419: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use SSE4.2 instructions, but these are available on your machine and could speed up CPU computations.
-2017-10-26 10:31:12.382425: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use AVX instructions, but these are available on your machine and could speed up CPU computations.
-2017-10-26 10:31:12.382429: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use AVX2 instructions, but these are available on your machine and could speed up CPU computations.
-2017-10-26 10:31:12.382433: W tensorflow/core/platform/cpu_feature_guard.cc:45] The TensorFlow library wasn't compiled to use FMA instructions, but these are available on your machine and could speed up CPU computations.
-2017-10-26 10:31:12.598319: I tensorflow/core/common_runtime/gpu/gpu_device.cc:955] Found device 0 with properties: 
-name: GeForce GTX 1070
-major: 6 minor: 1 memoryClockRate (GHz) 1.683
-pciBusID 0000:01:00.0
-Total memory: 7.95GiB
-Free memory: 7.86GiB
-2017-10-26 10:31:12.598360: I tensorflow/core/common_runtime/gpu/gpu_device.cc:976] DMA: 0 
-2017-10-26 10:31:12.598372: I tensorflow/core/common_runtime/gpu/gpu_device.cc:986] 0:   Y 
-2017-10-26 10:31:12.598384: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1045] Creating TensorFlow device (/gpu:0) -> (device: 0, name: GeForce GTX 1070, pci bus id: 0000:01:00.0)
 Using TensorFlow backend.
 Traceback (most recent call last):
-  File "fine_tuning.py", line 82, in <module>
-    model_tuning.compile(optimizer='sgd', loss='mse', metrics=['accuracy'])
-  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/training.py", line 850, in compile
-    sample_weight, mask)
-  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/training.py", line 465, in weighted
-    score_array = K.mean(score_array, axis=list(range(weight_ndim, ndim)))
-TypeError: 'NoneType' object cannot be interpreted as an integer
+  File "fine_tuning.py", line 70, in <module>
+    model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/keras/engine/topology.py", line 2613, in load_weights
+    f = h5py.File(filepath, mode='r')
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/h5py/_hl/files.py", line 269, in __init__
+    fid = make_fid(name, mode, userblock_size, fapl, swmr=swmr)
+  File "/home/qianww/anaconda3/envs/keras/lib/python3.6/site-packages/h5py/_hl/files.py", line 99, in make_fid
+    fid = h5f.open(name, flags, fapl=fapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5f.pyx", line 78, in h5py.h5f.open
+OSError: Unable to open file (unable to open file: name = 'model_frcnn/model_frnn.hdf5', errno = 2, error message = 'No such file or directory', flags = 0, o_flags = 0)
