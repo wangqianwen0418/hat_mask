@@ -154,7 +154,7 @@ for epoch_num in range(num_epochs):
         start_time = time.time()
         if epo_loss < best_loss:
           if C.verbose:
-            print('Total loss decreased from {:.4f} to {:.4f}, saving model'.format(best_loss, loss))
+            print('Total loss decreased from {:.4f} to {:.4f}, saving model'.format(best_loss, epo_loss))
           best_loss = epo_loss
           model_tuning.save_weights(C.model_path)
         break
