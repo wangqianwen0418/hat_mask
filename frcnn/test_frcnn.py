@@ -6,6 +6,9 @@ import sys
 import pickle
 from optparse import OptionParser
 import time
+
+import keras
+from keras import layers
 from keras_frcnn import config
 from keras import backend as K
 from keras.layers import Input
@@ -143,9 +146,9 @@ out = layers.Activation("sigmoid")(x)
 model_tuning = Model([feature_map_input, roi_input], out)
 
 print('Loading weights from {}'.format(C.model_path))
-model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_classifier_only.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_tuning.load_weights("model_frcnn/model_tuning.hdf5", by_name=True)
+model_rpn.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
+model_classifier_only.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
+model_tuning.load_weights("model_frcnn/model_tuning.h5", by_name=True)
 # model_rpn.compile(optimizer='sgd', loss='mse')
 # model_classifier.compile(optimizer='sgd', loss='mse')
 
@@ -212,6 +215,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 			if cls_name == "person":
 				person_roi[0, person_i, :] = ROIs[0, ii, :]
+				person_i += 1
 
 
 			if cls_name not in bboxes:
@@ -237,7 +241,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 			index = np.random.randint(0, person_i)
 			person_roi[0, person_i, :] = person_roi[0, index, :]
 			person_i += 1
-		no_hat = model_tuning.predict([F, person_roi])
+		no_hat = model_tuning.predict([F, person_roi])[0][0]
 	else:
 		no_hat = 0
 
@@ -256,7 +260,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 				cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
 
 				# textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
-        textLable = "no hat"
+				textLabel= "no hat"
 				all_dets.append((key,100*new_probs[jk]))
 
 				(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
