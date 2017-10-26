@@ -26,7 +26,7 @@ def format_img_channels(img, C):
 	img[:, :, 1] -= C.img_channel_mean[1]
 	img[:, :, 2] -= C.img_channel_mean[2]
 	img /= C.img_scaling_factor
-	if img.shape[3]!=3:
+	if img.shape[2]!=3:
 		img = np.transpose(img, (2, 0, 1))
 	img = np.expand_dims(img, axis=0)
 	return img
@@ -38,20 +38,17 @@ def format_img(img, C):
 	return img, ratio
 
 def load_imgs(data_dir, mode="train"):
-    if mode=="train":
-        index = range(1, 401)
-    else:
-        index = range(401,500)
     imgs = []
-    for i, v in enumerate(index):
-        try:
-            fname = '{:03d}.png'.format(v)
-            fpath = os.path.join(data_dir, fname)
-            imgs.append(fpath)
-        except Exception:
-            fname = '{:03d}.jpg'.format(v)
-            fpath = os.path.join(data_dir, fname)
-            imgs.append(fpath)
+    for idx, img_name in enumerate(sorted(os.listdir(data_dir))):
+        if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
+            continue
+        img_path = os.path.join(data_dir, img_name)
+        if mode=="train" and idx<400:
+            imgs.append(img_path)
+        elif mode == "val" and idx>399:
+            imgs.append(img_path)
+        elif mode =="all":
+            imgs.append(img_path)
     return imgs
 
 def load_labels(data_dir, mode="train", target="no_hat"):
@@ -67,8 +64,10 @@ def load_labels(data_dir, mode="train", target="no_hat"):
             labels[int(line[0])-1] = int(int(label)>0)
     if mode =="train":
         return labels[0: 400]  
+    elif mode == "all":
+        return labels
     else:
-        return labels[400: 500]
+        return labels[400:500]
 
 def get_data(data_dir, mode = "train", target="no_hat"):
     return load_imgs(data_dir, mode), load_labels(data_dir, mode, target)
@@ -77,10 +76,10 @@ def my_generator(all_img_data, all_label, C, mode='train'):
     while True:
         # if (mode == "train"):
         #     np.random.shuffle(all_img_data)
-        for i, img in enumerate(all_img_data):
-            img = cv2.imread(img)
-            X = format_img(img, C)
-            yield np.copy(X), np.array(1)
+        for i, img_path in enumerate(all_img_data):
+            img = cv2.imread(img_path)
+            X, ratio = format_img(img, C)
+            yield np.copy(X), np.array([all_label[i]])
 
 
 
