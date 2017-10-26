@@ -39,7 +39,7 @@ C.use_horizontal_flips = True
 C.use_vertical_flips = False
 C.rot_90 = True
 C.num_rois = 32 #Number of ROIs per iteration
-C.model_path = "model_frcnn/model_tuning_exp2.h5"
+C.model_path = "model_frcnn/model_tuning.h5"
 
 class_mapping = C.class_mapping
 if 'bg' not in class_mapping:
@@ -156,7 +156,7 @@ for epoch_num in range(num_epochs):
           if C.verbose:
             print('Total loss decreased from {:.4f} to {:.4f}, saving model'.format(best_loss, loss))
           best_loss = epo_loss
-          model_tuning.save(C.model_path)
+          model_tuning.save_weights(C.model_path)
         break
         
     except Exception as e:
