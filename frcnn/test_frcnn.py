@@ -6,6 +6,9 @@ import sys
 import pickle
 from optparse import OptionParser
 import time
+
+import keras
+from keras import layers
 from keras_frcnn import config
 from keras import backend as K
 from keras.layers import Input
@@ -13,7 +16,6 @@ from keras.models import Model, load_model
 from keras_frcnn import roi_helpers
 
 sys.setrecursionlimit(40000)
-print("test")
 parser = OptionParser()
 
 parser.add_option("-p", "--path", dest="test_path", help="Path to test data.")
@@ -143,9 +145,9 @@ out = layers.Activation("sigmoid")(x)
 model_tuning = Model([feature_map_input, roi_input], out)
 
 print('Loading weights from {}'.format(C.model_path))
-model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_classifier_only.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_tuning.load_weights("model_frcnn/model_tuning.hdf5", by_name=True)
+model_rpn.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
+model_classifier_only.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
+model_tuning.load_weights("model_frcnn/model_tuning.h5", by_name=True)
 # model_rpn.compile(optimizer='sgd', loss='mse')
 # model_classifier.compile(optimizer='sgd', loss='mse')
 
@@ -159,6 +161,8 @@ visualise = True
 
 for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
+		continue
+	if img_name !="057.png":
 		continue
 	print(img_name)
 	st = time.time()
@@ -212,6 +216,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 			if cls_name == "person":
 				person_roi[0, person_i, :] = ROIs[0, ii, :]
+				person_i += 1
 
 
 			if cls_name not in bboxes:
@@ -237,7 +242,7 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 			index = np.random.randint(0, person_i)
 			person_roi[0, person_i, :] = person_roi[0, index, :]
 			person_i += 1
-		no_hat = model_tuning.predict([F, person_roi])
+		no_hat = model_tuning.predict([F, person_roi])[0][0]
 	else:
 		no_hat = 0
 
@@ -253,22 +258,22 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 				(real_x1, real_y1, real_x2, real_y2) = get_real_coordinates(ratio, x1, y1, x2, y2)
 
-				cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
-
 				# textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
-        textLable = "no hat"
+				textLabel= "no hat: {:.3f}".format(no_hat)
 				all_dets.append((key,100*new_probs[jk]))
 
 				(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
 				textOrg = (real_x1, real_y1-0)
 				## put text upontail
-				cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
-				cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
-				cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+				if no_hat>0.4:
+					cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
+					cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
+					cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
+					cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
 	print('Elapsed time = {}'.format(time.time() - st))
 	# print(all_dets)
 	print("no_hat: ", no_hat)
-	if len(all_dets)>0 and no_hat>0.5:
+	if len(all_dets)>0:
 		cv2.imshow('img', img)
-		cv2.waitKey(300)
+		cv2.waitKey(30000)
