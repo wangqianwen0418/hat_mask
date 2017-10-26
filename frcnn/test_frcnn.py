@@ -9,11 +9,11 @@ import time
 from keras_frcnn import config
 from keras import backend as K
 from keras.layers import Input
-from keras.models import Model
+from keras.models import Model, load_model
 from keras_frcnn import roi_helpers
 
 sys.setrecursionlimit(40000)
-
+print("test")
 parser = OptionParser()
 
 parser.add_option("-p", "--path", dest="test_path", help="Path to test data.")
@@ -123,18 +123,20 @@ roi_input = Input(shape=(C.num_rois, 4))
 feature_map_input = Input(shape=input_shape_features)
 
 # define the base network (resnet here, can be VGG, Inception, etc)
-shared_layers = nn.nn_base(img_input, trainable=True)
+shared_layers = nn.nn_base(img_input, trainable=False)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
 rpn_layers = nn.rpn(shared_layers, num_anchors)
 
-classifier = nn.classifier(feature_map_input, roi_input, C.num_rois, nb_classes=len(class_mapping), trainable=True)
+classifier = nn.classifier(feature_map_input, roi_input, C.num_rois, nb_classes=len(class_mapping), trainable=False)
 
 model_rpn = Model(img_input, rpn_layers)
 model_classifier_only = Model([feature_map_input, roi_input], classifier)
-model_classifier_only.summary()
-# model_classifier = Model([feature_map_input, roi_input], classifier)
+
+model_tuning = load_model("model_frcnn/model_tuning_exp2.h5")
+
+
 
 print('Loading weights from {}'.format(C.model_path))
 model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
@@ -174,6 +176,8 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	# convert from (x1,y1,x2,y2) to (x,y,w,h)
 	R[:, 2] -= R[:, 0]
 	R[:, 3] -= R[:, 1]
+	person_roi = np.zeros((1, 32, 4))
+	person_i = 0
 
 	# apply the spatial pyramid pooling to the proposed regions
 	bboxes = {}
@@ -202,6 +206,10 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 			cls_name = class_mapping[np.argmax(P_cls[0, ii, :])]
 
+			if cls_name == "person":
+				person_roi[0, person_i, :] = ROIs[0, ii, :]
+
+
 			if cls_name not in bboxes:
 				bboxes[cls_name] = []
 				probs[cls_name] = []
@@ -220,6 +228,14 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 				pass
 			bboxes[cls_name].append([C.rpn_stride*x, C.rpn_stride*y, C.rpn_stride*(x+w), C.rpn_stride*(y+h)])
 			probs[cls_name].append(np.max(P_cls[0, ii, :]))
+	if person_i !=0:
+		while person_i < C.num_rois:
+			index = np.random.randint(0, person_i)
+			person_roi[0, person_i, :] = person_roi[0, index, :]
+			person_i += 1
+		no_hat = model_tuning.predict([F, person_roi])
+	else:
+		no_hat = 0
 
 	all_dets = []
 
@@ -240,13 +256,14 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 				(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
 				textOrg = (real_x1, real_y1-0)
-
-				cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
-				cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
-				cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+				## put text upontail
+				# cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
+				# cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
+				# cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
 	print('Elapsed time = {}'.format(time.time() - st))
-	print(all_dets)
-	if len(all_dets)>0:
+	# print(all_dets)
+	print("no_hat: ", no_hat)
+	if len(all_dets)>0 and no_hat>0.5:
 		cv2.imshow('img', img)
 		cv2.waitKey(300)
