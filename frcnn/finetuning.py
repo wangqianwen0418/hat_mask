@@ -106,7 +106,7 @@ for epoch_num in range(num_epochs):
       # convert from (x1,y1,x2,y2) to (x,y,w,h)
       R[:, 2] -= R[:, 0]
       R[:, 3] -= R[:, 1]
-      person_roi = np.zeros((1, 32, 4))
+      person_roi = np.zeros((1, C.num_rois, 4))
       person_i = 0
       for jk in range(R.shape[0]//C.num_rois + 1):
         ROIs = np.expand_dims(R[C.num_rois*jk:C.num_rois*(jk+1), :], axis=0) # shape [1, num_rois, 4]
