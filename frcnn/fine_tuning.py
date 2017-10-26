@@ -39,7 +39,7 @@ C.use_horizontal_flips = True
 C.use_vertical_flips = False
 C.rot_90 = True
 C.num_rois = 32 #Number of ROIs per iteration
-C.model_path = "model_frcnn/model_tuning_exp2.h5"
+C.model_path = "model_frcnn/model_tuning.h5"
 
 class_mapping = C.class_mapping
 if 'bg' not in class_mapping:
@@ -67,8 +67,8 @@ model_rpn = Model(img_input, rpn_layers)
 model_classifier_only = Model([feature_map_input, roi_input], classifier)
 
 # load pretrained weights
-model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-model_classifier_only.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
+model_rpn.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
+model_classifier_only.load_weights("model_frcnn/model_frcnn.hdf5", by_name=True)
 
 x = model_classifier_only.get_layer("time_distributed_1").output
 x = layers.TimeDistributed(layers.Dense(1, activation="sigmoid"))(x)
@@ -143,8 +143,8 @@ for epoch_num in range(num_epochs):
       loss, acc = model_tuning.train_on_batch([F, person_roi], label)
       losses[iter_num, 0] = loss
       losses[iter_num, 1] = acc
-      progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), (' acc', np.mean(losses[:iter_num, 1]))])
       iter_num += 1
+      progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), (' acc', np.mean(losses[:iter_num, 1]))])
       
       if iter_num == epoch_length:
         epo_loss = np.mean(losses[:, 0])
@@ -156,7 +156,7 @@ for epoch_num in range(num_epochs):
           if C.verbose:
             print('Total loss decreased from {:.4f} to {:.4f}, saving model'.format(best_loss, loss))
           best_loss = epo_loss
-          model_tuning.save(C.model_path)
+          model_tuning.save_weights(C.model_path)
         break
         
     except Exception as e:

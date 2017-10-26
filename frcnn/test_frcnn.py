@@ -134,14 +134,18 @@ classifier = nn.classifier(feature_map_input, roi_input, C.num_rois, nb_classes=
 model_rpn = Model(img_input, rpn_layers)
 model_classifier_only = Model([feature_map_input, roi_input], classifier)
 
-model_tuning = load_model("model_frcnn/model_tuning_exp2.h5")
-
-
+x = model_classifier_only.get_layer("time_distributed_1").output
+x = layers.TimeDistributed(layers.Dense(1, activation="sigmoid"))(x)
+# x = layers.Lambda(lambda x: K.max(x))(x)
+# x = layers.Flatten()(x)
+x = layers.Lambda(lambda x: K.max(x, axis=1))(x)
+out = layers.Activation("sigmoid")(x)
+model_tuning = Model([feature_map_input, roi_input], out)
 
 print('Loading weights from {}'.format(C.model_path))
 model_rpn.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
 model_classifier_only.load_weights("model_frcnn/model_frnn.hdf5", by_name=True)
-
+model_tuning.load_weights("model_frcnn/model_tuning.hdf5", by_name=True)
 # model_rpn.compile(optimizer='sgd', loss='mse')
 # model_classifier.compile(optimizer='sgd', loss='mse')
 
@@ -251,15 +255,16 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 
 				cv2.rectangle(img,(real_x1, real_y1), (real_x2, real_y2), (int(class_to_color[key][0]), int(class_to_color[key][1]), int(class_to_color[key][2])),2)
 
-				textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
+				# textLabel = '{}: {}'.format(key,int(100*new_probs[jk]))
+        textLable = "no hat"
 				all_dets.append((key,100*new_probs[jk]))
 
 				(retval,baseLine) = cv2.getTextSize(textLabel,cv2.FONT_HERSHEY_COMPLEX,1,1)
 				textOrg = (real_x1, real_y1-0)
 				## put text upontail
-				# cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
-				# cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
-				# cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
+				cv2.rectangle(img, (textOrg[0] - 5, textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (0, 0, 0), 2)
+				cv2.rectangle(img, (textOrg[0] - 5,textOrg[1]+baseLine - 5), (textOrg[0]+retval[0] + 5, textOrg[1]-retval[1] - 5), (255, 255, 255), -1)
+				cv2.putText(img, textLabel, textOrg, cv2.FONT_HERSHEY_DUPLEX, 1, (0, 0, 0), 1)
 
 	print('Elapsed time = {}'.format(time.time() - st))
 	# print(all_dets)
