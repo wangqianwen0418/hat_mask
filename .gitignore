@@ -4,3 +4,4 @@ data/
 test.py
 save_model/
 model_frcnn/
+tuning_log
