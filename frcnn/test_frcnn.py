@@ -162,8 +162,8 @@ visualise = True
 for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	if not img_name.lower().endswith(('.bmp', '.jpeg', '.jpg', '.png', '.tif', '.tiff')):
 		continue
-	if img_name !="057.png":
-		continue
+	# if int(img_name.split(".")[0])<400:
+	# 	continue
 	print(img_name)
 	st = time.time()
 	filepath = os.path.join(img_path,img_name)
@@ -276,4 +276,4 @@ for idx, img_name in enumerate(sorted(os.listdir(img_path))):
 	print("no_hat: ", no_hat)
 	if len(all_dets)>0:
 		cv2.imshow('img', img)
-		cv2.waitKey(30000)
+		cv2.waitKey(100)

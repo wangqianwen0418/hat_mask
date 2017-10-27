@@ -72,7 +72,7 @@ def load_labels(data_dir, mode="train", target="no_hat"):
 def get_data(data_dir, mode = "train", target="no_hat"):
     return load_imgs(data_dir, mode), load_labels(data_dir, mode, target)
 
-def my_generator(all_img_data, all_label, C, mode='train'):
+def my_generator(all_img_data, all_label, C):
     while True:
         # if (mode == "train"):
         #     np.random.shuffle(all_img_data)

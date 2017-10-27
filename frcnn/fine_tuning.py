@@ -22,6 +22,48 @@ from keras_frcnn import roi_helpers
 from keras_frcnn.my_parser import get_data, my_generator 
 import keras_frcnn.resnet as nn
 
+def one_batch(C, img, label, model_rpn, model_classifier_only, model_tuning, mode="train", bbox_threshold= 0.8):
+  [Y1, Y2, F] = model_rpn.predict(img)
+  R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7) # R.shape = [max_boxes, 4]
+  # convert from (x1,y1,x2,y2) to (x,y,w,h)
+  R[:, 2] -= R[:, 0]
+  R[:, 3] -= R[:, 1]
+  person_roi = np.zeros((1, C.num_rois, 4))
+  person_i = 0
+  for jk in range(R.shape[0]//C.num_rois + 1):
+    ROIs = np.expand_dims(R[C.num_rois*jk:C.num_rois*(jk+1), :], axis=0) # shape [1, num_rois, 4]
+    if ROIs.shape[1] == 0:
+      break
+    if jk == R.shape[0]//C.num_rois:
+      curr_shape = ROIs.shape
+      target_shape = (curr_shape[0],C.num_rois,curr_shape[2])
+      ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
+      ROIs_padded[:, :curr_shape[1], :] = ROIs
+      ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
+      ROIs = ROIs_padded
+    [P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
+    for ii in range(P_cls.shape[1]):
+      if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
+        continue
+      cls_id = np.argmax(P_cls[0, ii, :])
+      cls_name = class_mapping[cls_id]
+      if cls_name == "person":
+        person_roi[0, person_i, :] = ROIs[0, ii, :]
+        person_i += 1
+  if person_i == 0:
+    raise Exception("no_person")
+  while person_i < C.num_rois:
+    index = np.random.randint(0, person_i)
+    person_roi[0, person_i, :] = ROIs[0, index, :]
+    person_i += 1
+  if mode == "train":
+    scalar = model_tuning.train_on_batch([F, person_roi], label)
+  else:
+    scalar = model_tuning.test_on_batch([F, person_roi], label)
+  return scalar
+
+
+
 # for reproducible training
 seed = 7
 np.random.seed(seed)
@@ -54,11 +96,11 @@ roi_input = Input(shape=(C.num_rois, 4))
 feature_map_input = Input(shape=input_shape_features)
 
 # the base network, i use a resnet50 here
-shared_layers = nn.nn_base(img_input, trainable=False)
+shared_layers = nn.nn_base(img_input, trainable=True)
 
 # the rpn, built upon the base network
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
-rpn_layers = nn.rpn(shared_layers, num_anchors)
+rpn_layers = nn.rpn(shared_layers, num_anchors, trainable=False)
 
 classifier = nn.classifier(feature_map_input, roi_input, C.num_rois, nb_classes=len(class_mapping), trainable=True)
 
@@ -85,15 +127,16 @@ model_tuning.summary()
 train_imgs, train_labels = get_data("../data/", mode="train", target="no_hat")
 val_imgs, val_labels = get_data("../data/", mode="val", target="no_hat")
 
-data_gen_train = my_generator(train_imgs, train_labels, C, mode='train')
-data_gen_val = my_generator(val_imgs, val_labels, C, mode='val')
+data_gen_train = my_generator(train_imgs, train_labels, C)
+data_gen_val = my_generator(val_imgs, val_labels, C)
 
 # train the model_tuning
-epoch_length = 500
+epoch_length = len(train_imgs)
 num_epochs = 200
 iter_num = 0
 
 losses = np.zeros((epoch_length, 2))
+val_losses = np.zeros((len(val_imgs), 2))
 start_time = time.time()
 
 best_loss = np.Inf
@@ -107,51 +150,30 @@ for epoch_num in range(num_epochs):
     try:
       # not efficient, one image is a batch
       img, label = next(data_gen_train)
-      [Y1, Y2, F] = model_rpn.predict(img)
-      R = roi_helpers.rpn_to_roi(Y1, Y2, C, K.image_dim_ordering(), overlap_thresh=0.7) # R.shape = [max_boxes, 4]
-      # convert from (x1,y1,x2,y2) to (x,y,w,h)
-      R[:, 2] -= R[:, 0]
-      R[:, 3] -= R[:, 1]
-      person_roi = np.zeros((1, C.num_rois, 4))
-      person_i = 0
-      for jk in range(R.shape[0]//C.num_rois + 1):
-        ROIs = np.expand_dims(R[C.num_rois*jk:C.num_rois*(jk+1), :], axis=0) # shape [1, num_rois, 4]
-        if ROIs.shape[1] == 0:
-          break
-        if jk == R.shape[0]//C.num_rois:
-          curr_shape = ROIs.shape
-          target_shape = (curr_shape[0],C.num_rois,curr_shape[2])
-          ROIs_padded = np.zeros(target_shape).astype(ROIs.dtype)
-          ROIs_padded[:, :curr_shape[1], :] = ROIs
-          ROIs_padded[0, curr_shape[1]:, :] = ROIs[0, 0, :]
-          ROIs = ROIs_padded
-        [P_cls, P_regr] = model_classifier_only.predict([F, ROIs])
-        for ii in range(P_cls.shape[1]):
-          if np.max(P_cls[0, ii, :]) < bbox_threshold or np.argmax(P_cls[0, ii, :]) == (P_cls.shape[2] - 1):
-            continue
-          cls_id = np.argmax(P_cls[0, ii, :])
-          cls_name = class_mapping[cls_id]
-          if cls_name == "person":
-            person_roi[0, person_i, :] = ROIs[0, ii, :]
-            person_i += 1
-      if person_i == 0:
-        continue
-      while person_i < C.num_rois:
-        index = np.random.randint(0, person_i)
-        person_roi[0, person_i, :] = ROIs[0, index, :]
-        person_i += 1
-      loss, acc = model_tuning.train_on_batch([F, person_roi], label)
+      loss, acc = one_batch(C, img, label, model_rpn, model_classifier_only, model_tuning, mode="train", bbox_threshold= bbox_threshold)
       losses[iter_num, 0] = loss
       losses[iter_num, 1] = acc
       iter_num += 1
       progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), (' acc', np.mean(losses[:iter_num, 1]))])
       
       if iter_num == epoch_length:
-        epo_loss = np.mean(losses[:, 0])
-        epo_acc = np.mean(losses[:, 1])
-				# curr_loss = loss_rpn_cls + loss_rpn_regr + loss_class_cls + loss_class_regr
-        iter_num = 0
-        start_time = time.time()
+        val_iter = 0
+        while True:
+          try:
+            img, label = next(data_gen_val)
+            val_loss, val_acc = one_batch(C, img, label, model_rpn, model_classifier_only, model_tuning, mode="val", bbox_threshold= bbox_threshold)
+            val_losses[val_iter, 0] = val_loss
+            val_losses[val_iter, 1] = val_acc
+            val_iter += 1
+          except Exception as e:
+            # if e.args != "no_person":
+            print("val exception:", e)
+            val_iter += 1
+            continue
+          if val_iter == len(val_imgs):
+              print("val_loss:{}, val_acc:{}".format(np.mean(val_losses[:, 0]), np.mean(val_losses[:, 1])))
+              break
+        epo_loss = np.mean(val_losses[:, 0])
         if epo_loss < best_loss:
           if C.verbose:
             print('Total loss decreased from {:.4f} to {:.4f}, saving model'.format(best_loss, epo_loss))
@@ -160,7 +182,8 @@ for epoch_num in range(num_epochs):
         break
         
     except Exception as e:
-      print('Exception: {}'.format(e))
+      # if e.args != "no_person":
+      #   print('Exception: {}'.format(e))
       continue
 
 print('Training complete, exiting.')
