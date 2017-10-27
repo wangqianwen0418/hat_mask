@@ -41,17 +41,29 @@ data_dir = "../data/"
 #     data = preprocess_input(data)
 #     labels = np.array(labels)
 #     return data, labels
+def img_process(img_path, w, h):
+    """
+    # Augment:
+        img_path: .
+    # Return:
+        numpy array
+    """
+    img = image.load_img(f_path, target_size=(w, h))
+    x = image.img_to_array(img)
+
 
 def load_data(data_dir, mode, target, ratio):
-    '''
+    """
     # Augments:
-    data_dir: the path of data.
-    ratio: the percent of data that used for traing.
-    target: one of ("total", "no_suit", "no_mask", "no_hat").
-    mode: one of ("train", "val").
+        data_dir: the path of data.
+        ratio: the percent of data that used for traing.
+        target: one of ("total", "no_suit", "no_mask", "no_hat").
+        mode: one of ("train", "val").
     # Return:
-    data, label
-    '''
+        (data, label)
+    """
+    w = 224
+    h = 224
     imgs = []
     imgs_noperson = []
     labels = []
@@ -59,8 +71,7 @@ def load_data(data_dir, mode, target, ratio):
     for idx, file_name in enumerate(sorted(os.listdir(data_dir))):
         f_path = os.path.join(data_dir, file_name)
         if file_name.lower().endswith(( '.jpeg', '.jpg', '.png')):
-            img = image.load_img(f_path, target_size=(224, 224))
-            x = image.img_to_array(img)
+            x = img_process(f_path, 224, 224)
             imgs.append(x)
         elif file_name=="labels.txt":
             with open(f_path,"r") as f:
@@ -73,11 +84,12 @@ def load_data(data_dir, mode, target, ratio):
         else:
             for idx, img_name in  enumerate(sorted(os.listdir(f_path))):
                 img_path = os.path.join(f_path, img_name)
-                img = image.load_img(img_path, target_size=(224, 224))
-                x = image.img_to_array(img)
+                x = img_process(img_path, 224, 224)
                 imgs_noperson.append(x)
     imgs = np.copy(imgs)
+    imgs = preprocess_input(imgs)
     imgs_noperson = np.copy(imgs_noperson)
+    imgs_noperson = preprocess_input(imgs_noperson)
     labels = np.copy(labels)
     num_train_person = int(imgs.shape[0]*ratio)
     num_train_noperson = int(imgs_noperson.shape[0]*ratio)
