@@ -157,9 +157,14 @@ for epoch_num in range(num_epochs):
       progbar.update(iter_num, [('loss', np.mean(losses[:iter_num, 0])), (' acc', np.mean(losses[:iter_num, 1]))])
       
       if iter_num == epoch_length:
+        iter_num = 0
         val_iter = 0
         while True:
           try:
+            if val_iter == len(val_imgs):
+              print("val_loss:{}, val_acc:{}".format(np.mean(val_losses[:, 0]), np.mean(val_losses[:, 1])))
+              val_iter = 0
+              break
             img, label = next(data_gen_val)
             val_loss, val_acc = one_batch(C, img, label, model_rpn, model_classifier_only, model_tuning, mode="val", bbox_threshold= bbox_threshold)
             val_losses[val_iter, 0] = val_loss
@@ -167,12 +172,9 @@ for epoch_num in range(num_epochs):
             val_iter += 1
           except Exception as e:
             # if e.args != "no_person":
-            print("val exception:", e)
+            # print("val exception:", e)
             val_iter += 1
             continue
-          if val_iter == len(val_imgs):
-              print("val_loss:{}, val_acc:{}".format(np.mean(val_losses[:, 0]), np.mean(val_losses[:, 1])))
-              break
         epo_loss = np.mean(val_losses[:, 0])
         if epo_loss < best_loss:
           if C.verbose:
