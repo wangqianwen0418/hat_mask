@@ -11,10 +11,12 @@ from keras import backend as K
 import numpy as np
 import os
 from random import shuffle
+from PIL import Image as pil_image
 
 ratio = 0.8
 batch_size = 32
-epochs = 100
+epochs = 200
+min_size = 600 # the size of resized images
 data_dir = "../data/"
 
 # def load_data(data_dir):
@@ -41,8 +43,22 @@ data_dir = "../data/"
 #     data = preprocess_input(data)
 #     labels = np.array(labels)
 #     return data, labels
+def img_process(img_path, min_size):
+    """
+    # Augment:
+        img_path: .
+    # Return:
+        numpy array
+    """
+    img = pil_image.open(img_path)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
+    resample = pil_image.BILINEAR
+    img = img.resize((min_size, min_size), resample)
+    x = image.img_to_array(img)
+    return x
 
-def load_data(data_dir, mode, target, ratio):
+def load_data(data_dir, mode, target, ratio, min_size):
     '''
     # Augments:
     data_dir: the path of data.
@@ -59,8 +75,7 @@ def load_data(data_dir, mode, target, ratio):
     for idx, file_name in enumerate(sorted(os.listdir(data_dir))):
         f_path = os.path.join(data_dir, file_name)
         if file_name.lower().endswith(( '.jpeg', '.jpg', '.png')):
-            img = image.load_img(f_path, target_size=(224, 224))
-            x = image.img_to_array(img)
+            x = img_process(f_path, min_size)
             imgs.append(x)
         elif file_name=="labels.txt":
             with open(f_path,"r") as f:
@@ -73,11 +88,12 @@ def load_data(data_dir, mode, target, ratio):
         else:
             for idx, img_name in  enumerate(sorted(os.listdir(f_path))):
                 img_path = os.path.join(f_path, img_name)
-                img = image.load_img(img_path, target_size=(224, 224))
-                x = image.img_to_array(img)
+                x = img_process(img_path, min_size)
                 imgs_noperson.append(x)
     imgs = np.copy(imgs)
+    imgs = preprocess_input(imgs)
     imgs_noperson = np.copy(imgs_noperson)
+    imgs_noperson = preprocess_input(imgs_noperson)
     labels = np.copy(labels)
     num_train_person = int(imgs.shape[0]*ratio)
     num_train_noperson = int(imgs_noperson.shape[0]*ratio)
@@ -91,9 +107,9 @@ def load_data(data_dir, mode, target, ratio):
         return x_val, y_val
 
 
-x_train, y_train = load_data(data_dir=data_dir, mode="train", target="total", ratio=ratio)
-x_val, y_val = load_data(data_dir=data_dir, mode="val", target="total", ratio=ratio)
-print(x_train.shape, y_train.shape, x_val.shape, y_val.shape)
+x_train, y_train = load_data(data_dir=data_dir, mode="train", target="total", ratio=ratio, min_size = min_size)
+x_val, y_val = load_data(data_dir=data_dir, mode="val", target="total", ratio=ratio, min_size = min_size)
+print("x train:", x_train.shape, "y train:", y_train.shape, "x val: ", x_val.shape,"y val:", y_val.shape)
 max_count = max(np.max(y_train), np.max(y_val))+1
 y_train = keras.utils.to_categorical(y_train, max_count)
 y_val = keras.utils.to_categorical(y_val, max_count)
@@ -111,7 +127,8 @@ datagen = ImageDataGenerator(
 datagen.fit(x_train)
 
 # create the base pre-trained model
-base_model = ResNet50(weights='imagenet', include_top=False, input_shape = (224,224,3))
+base_model = ResNet50(weights=None, include_top=False, input_shape = (min_size, min_size,3))
+base_model.load_weights("../frcnn/model_frcnn/model_frcnn.hdf5", by_name=True)
 x = base_model.output
 #x = Dense(256, activation = 'relu')(x)
 x = Flatten()(x)
@@ -156,6 +173,6 @@ model.compile(optimizer=SGD(lr=0.001, momentum=0.9), loss='categorical_crossentr
 # train the model on the new data for a few epochs
 # train the model on the new data for a few epochs
 model.fit_generator(datagen.flow(x_train, y_train, batch_size=batch_size),
-                    steps_per_epoch=x_train.shape[0] // batch_size, epochs=epochs, 
+                    steps_per_epoch=x_train.shape[0] // batch_size, epochs=epochs*2, 
                     validation_data = (x_val, y_val),
                     callbacks=callbacks)
